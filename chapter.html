@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KynayMic - Baca Chapter</title>
+    
+    <script src="/global-proxy-patch.js" defer></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers:wght@400&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style type="text/tailwindcss">
+        @layer base {
+            body {
+                background-color: #FFF9E0;
+                font-family: 'Inter', sans-serif;
+                color: #000000;
+                overflow: hidden; /* Mencegah scroll selama loading dan di tampilan buku */
+            }
+            #main-content {
+                height: calc(100vh - 100px); /* Adjust based on header height */
+            }
+        }
+        @layer components {
+            .comic-title-stroke {
+                font-family: 'Bangers', cursive;
+                letter-spacing: 1px;
+                color: #FFD75C !important;
+                text-shadow:
+                    2px 2px 0 #000,
+                    -2px -2px 0 #000,
+                    2px -2px 0 #000,
+                    -2px 2px 0 #000,
+                    2px 0 0 #000,
+                    -2px 0 0 #000,
+                    0 2px 0 #000,
+                    0 -2px 0 #000,
+                    1px 1px 2px rgba(0, 0, 0, 0.6);
+            }
+            
+            .comic-border {
+                border: 4px solid #000000;
+            }
+            
+            .comic-shadow {
+                box-shadow: 6px 6px 0px #000000;
+            }
+
+            /* Tombol Navigasi Halaman Kustom */
+            .page-nav-button {
+                @apply rounded-full px-6 py-3 bg-amber-100 border-4 border-black text-black font-bangers text-2xl shadow-[4px_4px_0_#000] transition-all duration-200 transform-gpu tap-highlight-transparent flex items-center gap-2;
+            }
+            .page-nav-button:hover {
+                @apply scale-[1.08] -rotate-[2deg];
+            }
+            .page-nav-button:active {
+                @apply scale-[0.95] rotate-0 shadow-[2px_2px_0_#000];
+            }
+            
+            /* Halaman Buku */
+            .book-page {
+                @apply absolute inset-0 w-full h-full transform-gpu origin-right [transform-style:preserve-3d] [backface-visibility:hidden];
+            }
+            
+            .page-face {
+                @apply absolute inset-0 w-full h-full bg-panel comic-border comic-shadow rounded-lg p-4 overflow-hidden [backface-visibility:hidden] flex justify-center items-center;
+            }
+            
+            .page-front {
+                @apply page-face;
+            }
+            
+            .page-back {
+                @apply page-face [transform:rotateY(-180deg)];
+            }
+            
+            .page-content {
+                @apply w-full h-full object-contain;
+            }
+            
+            /* Ilusi bayangan dalam buku */
+            .shadow-overlay-right {
+                @apply content-[''] absolute inset-0 w-full h-full bg-gradient-to-l from-black/20 to-transparent pointer-events-none opacity-0 transition-opacity;
+            }
+            
+            .shadow-overlay-left {
+                @apply content-[''] absolute inset-0 w-full h-full bg-gradient-to-r from-black/20 to-transparent pointer-events-none opacity-0 transition-opacity;
+            }
+            
+            /* Styling untuk tombol navigasi chapter yang lama */
+            .chapter-nav-button {
+                 @apply bg-mustard font-bangers text-3xl px-8 py-4 comic-border rounded-md comic-shadow text-textblack comic-title-stroke tracking-wider transform tap-highlight-transparent flex items-center gap-2 transition-all duration-200;
+            }
+            .chapter-nav-button:hover {
+                @apply scale-105;
+            }
+            .chapter-nav-button:active {
+                @apply scale-95 shadow-[3px_3px_0_#000];
+            }
+        }
+        @layer utilities {
+            .tap-highlight-transparent {
+                -webkit-tap-highlight-color: transparent;
+            }
+        }
+    </style>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        mustard: '#FFC300',
+                        panel: '#FFF9E0',
+                        textblack: '#000000',
+                    },
+                    fontFamily: {
+                        bangers: ['Bangers', 'cursive'],
+                        inter: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-panel text-textblack font-inter">
+
+    <div id="loading-state" class="fixed inset-0 bg-mustard z-50 flex flex-col justify-center items-center p-4 overflow-hidden [perspective:1000px]">
+        <div id="book" class="relative w-48 h-64 sm:w-64 sm:h-80 [transform-style:preserve-3d] transform-gpu">
+            <div id="book-back-cover" class="absolute inset-0 bg-panel comic-border comic-shadow rounded-lg transform-gpu [transform:translateZ(-10px)]"></div>
+            <div class="page absolute w-full h-full bg-white comic-border rounded-lg transform-gpu origin-left [transform-style:preserve-3d] [backface-visibility:hidden] [transform:translateZ(-8px)]"></div>
+            <div class="page absolute w-full h-full bg-white comic-border rounded-lg transform-gpu origin-left [transform-style:preserve-3d] [backface-visibility:hidden] [transform:translateZ(-6px)]"></div>
+            <div class="page absolute w-full h-full bg-white comic-border rounded-lg transform-gpu origin-left [transform-style:preserve-3d] [backface-visibility:hidden] [transform:translateZ(-4px)]"></div>
+            <div class="page absolute w-full h-full bg-white comic-border rounded-lg transform-gpu origin-left [transform-style:preserve-3d] [backface-visibility:hidden] [transform:translateZ(-2px)]"></div>
+            <div id="book-cover" class="absolute inset-0 bg-panel comic-border comic-shadow rounded-lg transform-gpu origin-left [transform-style:preserve-3d] [backface-visibility:hidden] [transform:translateZ(10px)]"></div>
+        </div>
+        <div id="plane-wrapper" class="absolute inset-0 flex justify-center items-center opacity-0 [transform:translateZ(30px)]">
+            <div id="plane" class="text-5xl sm:text-7xl transform -rotate-45">✈️</div>
+        </div>
+        <div id="plane-trail" class="absolute w-2 h-2 bg-white rounded-full opacity-0 [box-shadow:0_0_15px_8px_white] transform-gpu"></div>
+        <div id="loading-text" class="comic-title-stroke text-4xl sm:text-5xl text-mustard mt-8 text-center opacity-100">
+            Membuka Chapter...
+        </div>
+        <div id="final-message" class="absolute inset-0 flex justify-center items-center p-4 opacity-0 hidden">
+             <div class="comic-title-stroke text-6xl sm:text-8xl md:text-9xl text-mustard text-center leading-tight">
+                 NIKMATI BACAANMU
+             </div>
+        </div>
+        <div id="comic-burst" class="absolute w-64 h-64 opacity-0" style="clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background-color: #FFD75C;"></div>
+    </div>
+
+    <div id="error-state" class="fixed inset-0 bg-mustard z-40 flex justify-center items-center p-4 hidden">
+        <div class="bg-panel comic-border rounded-md p-8 sm:p-12 text-center text-textblack comic-shadow max-w-lg w-full">
+            <div class="text-7xl sm:text-9xl">🚫</div>
+            <div class="comic-title-stroke text-5xl sm:text-7xl text-mustard mt-4">
+                Oops! Panel Kosong!
+            </div>
+            <div class="font-inter text-xl sm:text-2xl mt-6">
+                Tidak bisa memuat cerita. Coba lagi nanti, pahlawan!
+            </div>
+            <button id="retry-button" class="mt-10 bg-mustard font-bangers text-3xl px-10 py-3 comic-border rounded-md comic-shadow text-textblack comic-title-stroke tracking-wider">
+                Coba Lagi
+            </button>
+        </div>
+    </div>
+
+    <div id="main-content" class="hidden flex flex-col h-screen">
+
+        <header id="navbar" class="bg-mustard comic-border border-b-8 p-4 md:p-6 flex items-center justify-between shadow-lg sticky top-0 z-30">
+            <a id="back-button" href="#" class="font-bangers text-4xl sm:text-5xl text-textblack tap-highlight-transparent transform">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <h1 class="comic-title-stroke text-5xl sm:text-6xl lg:text-7xl text-textblack text-center px-4">
+                KynayMic
+            </h1>
+            <div class="w-12 sm:w-16"></div>
+        </header>
+
+        <main class="flex-grow flex flex-col items-center justify-center overflow-hidden [perspective:2000px] relative">
+            
+            <div id="bg-gradient-overlay" class="absolute inset-0 w-full h-full bg-gradient-to-b from-amber-100 to-amber-200 z-0 opacity-0"></div>
+            
+            <h2 id="chapter-title-header" class="comic-title-stroke text-4xl md:text-5xl text-mustard text-center mb-2 md:mb-4 opacity-0 z-10">
+                Memuat Chapter...
+            </h2>
+            
+            <div id="book-wrapper" class="relative w-[95vw] h-[70vh] md:w-[80vw] md:h-[75vh] lg:w-[60vw] max-w-5xl md:aspect-[2/1] mt-0 md:mt-2 z-10 opacity-0">
+                
+                <div id="book-container" class="absolute inset-0 [transform-style:preserve-3d] transform-gpu">
+                    
+                    <div id="page-cover-left" class="hidden md:flex page-face absolute left-0 w-1/2 h-full [transform:rotateY(0deg)] z-[5]">
+                        <div class="shadow-overlay-left !opacity-100"></div>
+                        <div id="page-left-content" class="page-content flex justify-center items-center">
+                        </div>
+                    </div>
+                    
+                    <div id="page-stack" class="absolute inset-0 md:left-1/2 md:w-1/2 h-full [transform-style:preserve-3d]">
+                    </div>
+
+                </div>
+                
+                <div id="reflection-overlay" class="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent pointer-events-none opacity-50 -translate-x-full"></div>
+            </div>
+
+            <div id="page-navigation" class="hidden md:flex items-center justify-center gap-8 mt-6 z-10">
+                <button id="prev-page-btn" class="page-nav-button">
+                    <i class="fa-solid fa-arrow-left"></i> Sebelumnya
+                </button>
+                <button id="next-page-btn" class="page-nav-button">
+                    Selanjutnya <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+            
+            <div id="chapter-navigation" class="hidden flex-col sm:flex-row justify-center items-center gap-6 mt-8 z-10">
+                <a id="back-to-detail" href="#" class="chapter-nav-button">
+                    <i class="fa-solid fa-house"></i>
+                    Kembali
+                </a>
+                <a id="prev-chapter" href="#" class="chapter-nav-button">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Sebelumnya
+                </a>
+                <a id="next-chapter" href="#" class="chapter-nav-button">
+                    Selanjutnya
+                    <i class="fa-solid fa-arrow-right"></i>
+                </a>
+            </div>
+            
+        </main>
+
+        <footer id="footer" class="bg-mustard border-t-8 comic-border p-3 md:p-6 text-center shadow-inner z-10 opacity-0">
+            <p class="font-bangers text-lg md:text-xl text-textblack tracking-wide">
+                © 2025 KynayMic | Created by Farhan Kertadiwangsa
+            </p>
+        </footer>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            gsap.registerPlugin(ScrollTrigger);
+            
+            const loadingState = document.getElementById('loading-state');
+            const errorState = document.getElementById('error-state');
+            const mainContent = document.getElementById('main-content');
+            
+            const retryButton = document.getElementById('retry-button');
+            const backButton = document.getElementById('back-button');
+            const navbar = document.getElementById('navbar');
+            const footer = document.getElementById('footer');
+            
+            const chapterTitleHeader = document.getElementById('chapter-title-header');
+            const pageStack = document.getElementById('page-stack');
+            const pageLeftContent = document.getElementById('page-left-content');
+            const pageCoverLeft = document.getElementById('page-cover-left');
+            
+            const pageNavigation = document.getElementById('page-navigation');
+            const prevPageBtn = document.getElementById('prev-page-btn');
+            const nextPebBtn = document.getElementById('next-page-btn');
+            
+            const chapterNavigation = document.getElementById('chapter-navigation');
+            const backToDetail = document.getElementById('back-to-detail');
+            const prevChapter = document.getElementById('prev-chapter');
+            const nextChapter = document.getElementById('next-chapter');
+            
+            const placeholderError = 'https://placehold.co/800x1200/FFF9E0/000?text=Image+Error';
+
+            let chapterPagesData = [];
+            let currentPageIndex = 0;
+            let isFlipping = false;
+            let isMobile = window.innerWidth < 768;
+            
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            function playClickSound() {
+                try {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.type = 'triangle';
+                    oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+                    
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.1);
+                } catch (e) {
+                    console.warn("Web Audio API is not supported in this browser or failed to play sound.");
+                }
+            }
+            
+            function getUrlParams() {
+                const params = new URLSearchParams(window.location.search);
+                const slug = params.get('slug');
+                const comicSlug = params.get('comic');
+                return { slug, comicSlug };
+            }
+
+            async function fetchData(slug, comicSlug) {
+                if (!slug) {
+                    showError();
+                    return;
+                }
+                
+                const API_URL = `/api/proxy?rest=komikstation/chapter/${slug}`;
+                showLoading();
+
+                try {
+                    const response = await fetch(API_URL);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        populateData(data, comicSlug);
+                        showContent();
+                    } else {
+                        throw new Error("API request was not successful.");
+                    }
+                } catch (error) {
+                    console.error("Gagal mengambil data chapter:", error);
+                    showError();
+                }
+            }
+            
+            function createPageContent(item) {
+                if (!item) {
+                    return '<div class="page-content"></div>'; // Blank page
+                }
+                if (item.type === 'title') {
+                    return `<div class="page-content flex flex-col justify-center items-center text-center p-8">
+                                <h3 class="comic-title-stroke text-6xl md:text-7xl lg:text-8xl text-mustard">${item.content}</h3>
+                                <p class="font-bangers text-3xl mt-4">Geser atau Klik untuk memulai</p>
+                            </div>`;
+                }
+                if (item.type === 'image') {
+                    const imgSrc = `/api/proxy-img?url=${encodeURIComponent(item.content)}`;
+                    return `<img src="${imgSrc}" alt="Halaman Komik" class="page-content" loading="lazy" onerror="this.src='${placeholderError}'">`;
+                }
+                return '<div class="page-content"></div>';
+            }
+            
+            function populateData(data, comicSlugFromUrl) {
+                chapterTitleHeader.textContent = data.title || 'Judul Chapter';
+                
+                const finalComicSlug = comicSlugFromUrl || data.comicSlug;
+                const images = data.images || [];
+                
+                chapterPagesData = [];
+                currentPageIndex = 0;
+
+                if (isMobile) {
+                    chapterPagesData.push({ type: 'title', content: data.title });
+                    images.forEach(imgSrc => {
+                        chapterPagesData.push({ type: 'image', content: imgSrc });
+                    });
+                } else {
+                    let pairs = [];
+                    pairs.push({ left: { type: 'title', content: data.title }, right: { type: 'image', content: images[0] || null } });
+                    for (let i = 1; i < images.length; i += 2) {
+                        pairs.push({ left: { type: 'image', content: images[i] || null }, right: { type: 'image', content: images[i+1] || null } });
+                    }
+                    chapterPagesData = pairs;
+                }
+                
+                buildBookDOM();
+
+                if (data.prevSlug) {
+                    prevChapter.href = `/chapter.html?slug=${data.prevSlug}&comic=${finalComicSlug}`;
+                    gsap.set(prevChapter, { display: 'flex' });
+                } else {
+                    gsap.set(prevChapter, { display: 'none' });
+                }
+                
+                if (data.nextSlug) {
+                    nextChapter.href = `/chapter.html?slug=${data.nextSlug}&comic=${finalComicSlug}`;
+                    gsap.set(nextChapter, { display: 'flex' });
+                } else {
+                    gsap.set(nextChapter, { display: 'none' });
+                }
+
+                if (finalComicSlug) {
+                    backToDetail.href = `/detail.html?slug=${finalComicSlug}`;
+                } else {
+                    backToDetail.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        window.history.back();
+                    });
+                }
+            }
+
+            function buildBookDOM() {
+                pageStack.innerHTML = '';
+                
+                if (isMobile) {
+                    gsap.set(pageCoverLeft, { display: 'none' });
+                    chapterPagesData.forEach((page, i) => {
+                        const pageEl = document.createElement('div');
+                        pageEl.className = 'book-page absolute inset-0';
+                        pageEl.id = `book-page-${i}`;
+                        pageEl.style.zIndex = chapterPagesData.length - i;
+                        
+                        let frontContent = createPageContent(page);
+                        let backContent = (i + 1 < chapterPagesData.length) ? createPageContent(chapterPagesData[i+1]) : '';
+                        
+                        pageEl.innerHTML = `
+                            <div class="page-front">${frontContent}</div>
+                            <div class="page-back">${backContent}</div>
+                        `;
+                        pageStack.appendChild(pageEl);
+                    });
+
+                } else {
+                    pageLeftContent.innerHTML = createPageContent(chapterPagesData[0].left);
+                    
+                    chapterPagesData.forEach((pair, i) => {
+                        const pageEl = document.createElement('div');
+                        pageEl.className = 'book-page';
+                        pageEl.id = `book-page-${i}`;
+                        pageEl.style.zIndex = (chapterPagesData.length - i) + 10;
+                        
+                        let frontContent = createPageContent(pair.right);
+                        let backContent = (i + 1 < chapterPagesData.length) ? createPageContent(chapterPagesData[i+1].left) : '';
+
+                        pageEl.innerHTML = `
+                            <div class="page-front">
+                                <div class="shadow-overlay-right"></div>
+                                ${frontContent}
+                            </div>
+                            <div class="page-back">
+                                <div class="shadow-overlay-left"></div>
+                                ${backContent}
+                            </div>
+                        `;
+                        pageStack.appendChild(pageEl);
+                    });
+                }
+            }
+
+            function showLoading() {
+                loadingState.classList.remove('hidden');
+                errorState.classList.add('hidden');
+                mainContent.classList.add('hidden');
+                
+                const bookContainer = document.getElementById('book');
+                const bookCover = document.getElementById('book-cover');
+                const pages = document.querySelectorAll('#book .page');
+                const loadingText = document.getElementById('loading-text');
+                const planeWrapper = document.getElementById('plane-wrapper');
+                const plane = document.getElementById('plane');
+                const planeTrail = document.getElementById('plane-trail');
+                const finalMessage = document.getElementById('final-message');
+                const comicBurst = document.getElementById('comic-burst');
+    
+                const loadingTl = gsap.timeline({ defaults: { ease: "power1.out" } });
+    
+                gsap.set(bookContainer, { scale: 0, opacity: 0, rotationY: -30, rotationX: 10 });
+                gsap.set(bookCover, { rotationY: 0 });
+                gsap.set(pages, { rotationY: 0 });
+                gsap.set(planeWrapper, { opacity: 0, scale: 0.5, x: 0, y: 0, rotation: 0 });
+                gsap.set(plane, { rotation: -45 });
+                gsap.set(planeTrail, { opacity: 0, scale: 1, x: 0, y: 0 });
+                gsap.set(loadingText, { textContent: "Membuka Chapter...", opacity: 1, y: 0 });
+                gsap.set(finalMessage, { opacity: 0, scale: 0.8, display: 'none' });
+                gsap.set(comicBurst, { opacity: 0, scale: 0 });
+    
+                loadingTl.to(bookContainer, { scale: 1, opacity: 1, rotationY: 0, rotationX: 0, duration: 0.7, ease: 'back.out(1.7)' })
+                         .from(loadingText, { opacity: 0, y: 20, duration: 0.3 }, "-=0.4")
+                         .to(bookContainer, { rotationY: -15, rotationX: 5, duration: 0.3, ease: 'power1.inOut' }, "+=0.2")
+                         .to(bookCover, { rotationY: -170, duration: 0.5, ease: 'power2.inOut' })
+                         .to(pages[0], { rotationY: -180, duration: 0.15, ease: 'power1.in' }, "-=0.1")
+                         .to(pages[1], { rotationY: -180, duration: 0.15, ease: 'power1.in' }, "-=0.08")
+                         .to(pages[2], { rotationY: -180, duration: 0.15, ease: 'power1.in' }, "-=0.08")
+                         .to(pages[3], { rotationY: -180, duration: 0.15, ease: 'power1.in' }, "-=0.08")
+                         .to(loadingText, { opacity: 0, y: -20, duration: 0.2 }, "+=0.1")
+                         .set(planeWrapper, { opacity: 1 })
+                         .set(planeTrail, { opacity: 1 })
+                         .from(planeWrapper, { scale: 0, duration: 0.5, ease: 'back.out(2.5)' }, "-=0.1")
+                         .to(bookCover, { rotationY: 0, duration: 0.3, ease: 'power1.in' }, "<")
+                         .to(bookContainer, { scale: 0, opacity: 0, duration: 0.4, ease: 'power1.in' }, "+=0.1")
+                         .add("flight", "-=0.2")
+                         .to(planeWrapper, {
+                             x: '120vw',
+                             y: '-120vh',
+                             rotation: 30,
+                             duration: 1.5,
+                             ease: 'power2.in'
+                         }, "flight")
+                         .to(planeTrail, {
+                             x: '120vw',
+                             y: '-120vh',
+                             rotation: 30,
+                             duration: 1.5,
+                             ease: 'power2.in'
+                         }, "flight")
+                         .to(planeTrail, {
+                             scale: 25,
+                             opacity: 0,
+                             duration: 1.0,
+                             ease: 'power1.out'
+                         }, "flight+=0.15")
+                         .set(finalMessage, { display: 'flex' }, "flight+=0.4")
+                         .to(finalMessage, { 
+                             opacity: 1, 
+                             scale: 1, 
+                             duration: 0.7, 
+                             ease: 'elastic.out(1, 0.4)' 
+                         }, "flight+=0.4");
+            }
+
+            function showError() {
+                loadingState.classList.add('hidden');
+                errorState.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+                
+                const errorTl = gsap.timeline();
+                errorTl.fromTo(errorState.firstElementChild,
+                    { scale: 0.7, opacity: 0, rotation: 15 }, 
+                    { scale: 1, opacity: 1, rotation: 0, duration: 0.7, ease: "elastic.out(1, 0.4)" }
+                );
+                errorTl.fromTo("#error-state .text-7xl", { scale: 0, opacity: 0, rotation: -90 }, { scale: 1, opacity: 1, rotation: 0, duration: 1, ease: "elastic.out(1, 0.3)" }, "-=0.5");
+                errorTl.fromTo(retryButton, { y: 50, opacity: 0, scale: 0.8 }, { y: 0, opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2)" }, "-=0.4");
+            }
+
+            function showContent() {
+                const tl = gsap.timeline();
+                tl.set(document.body, { overflow: 'hidden' });
+                tl.to(loadingState, { 
+                    scale: 0.8, 
+                    opacity: 0, 
+                    duration: 0.4, 
+                    ease: "power1.in" 
+                })
+                .add(() => {
+                    loadingState.classList.add('hidden');
+                    errorState.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                })
+                .add(runEntryAnimations);
+            }
+            
+            function runEntryAnimations() {
+                const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
+
+                tl.from(navbar, { yPercent: -120, opacity: 0, duration: 1, ease: "bounce.out" });
+                tl.from(backButton, { scale: 0, opacity: 0, rotation: -180, duration: 0.7, ease: "back.out(1.7)" }, "-=0.7");
+                tl.from("#navbar h1", { scale: 0.5, skewX: 20, opacity: 0, duration: 0.7, ease: "elastic.out(1, 0.5)" }, "-=0.8");
+
+                tl.to(chapterTitleHeader, { opacity: 1, duration: 0.1 }, "-=0.5");
+                tl.from(chapterTitleHeader, { y: -30, scale: 0.8, duration: 0.5, ease: "back.out(1.4)" }, "-=0.5");
+                
+                tl.from(footer, { yPercent: 100, opacity: 0, duration: 1, ease: "power2.out" }, 0);
+                
+                tl.to("#bg-gradient-overlay", { opacity: 1, duration: 0.8 }, 0);
+                
+                tl.set("#book-wrapper", { opacity: 1 });
+                tl.from("#book-wrapper", {
+                    y: "100%",
+                    scale: 0.8,
+                    rotateX: 15,
+                    duration: 1.2,
+                    ease: "back.out(1.8)"
+                }, "-=0.8");
+                
+                tl.to(".shadow-overlay-right, .shadow-overlay-left", {
+                    opacity: 0.3,
+                    duration: 0.5
+                }, "-=0.5");
+                
+                tl.to("#reflection-overlay", {
+                    translateX: "100%",
+                    duration: 1.5,
+                    ease: "power1.inOut"
+                }, "-=0.6");
+                
+                tl.to("#book-container", {
+                    y: -5,
+                    repeat: -1,
+                    yoyo: true,
+                    duration: 2.5,
+                    ease: "power1.inOut"
+                });
+                
+                if (!isMobile) {
+                    tl.from(pageNavigation, { y: 30, opacity: 0, duration: 0.5, ease: "back.out(1.7)" }, "-=1.2");
+                }
+                
+                initBookNavigation();
+            }
+
+            function initBookNavigation() {
+                prevPageBtn.addEventListener('click', () => {
+                    playClickSound();
+                    goToPrevPage();
+                });
+                nextPebBtn.addEventListener('click', () => {
+                    playClickSound();
+                    goToNextPage();
+                });
+                
+                let touchStartX = 0;
+                let touchEndX = 0;
+                const bookWrapper = document.getElementById('book-wrapper');
+                
+                bookWrapper.addEventListener('touchstart', (e) => {
+                    touchStartX = e.changedTouches[0].screenX;
+                }, { passive: true });
+                
+                bookWrapper.addEventListener('touchend', (e) => {
+                    touchEndX = e.changedTouches[0].screenX;
+                    handleSwipe();
+                });
+                
+                function handleSwipe() {
+                    const deltaX = touchEndX - touchStartX;
+                    if (Math.abs(deltaX) < 80) return; 
+
+                    if (deltaX < 0) {
+                        goToNextPage();
+                    } else {
+                        goToPrevPage();
+                    }
+                }
+            }
+
+            function goToNextPage() {
+                if (isFlipping || currentPageIndex >= chapterPagesData.length - (isMobile ? 1 : 1)) {
+                    if (currentPageIndex === chapterPagesData.length - 1) {
+                        showChapterEnd();
+                    }
+                    return;
+                }
+                
+                isFlipping = true;
+                const pageEl = document.getElementById(`book-page-${currentPageIndex}`);
+                currentPageIndex++;
+
+                const tl = gsap.timeline({
+                    onComplete: () => {
+                        isFlipping = false;
+                        if (!isMobile) {
+                            pageLeftContent.innerHTML = createPageContent(chapterPagesData[currentPageIndex].left);
+                        }
+                    }
+                });
+                
+                if (isMobile) {
+                    tl.to(pageEl, {
+                        rotationY: -90,
+                        duration: 0.5,
+                        ease: "power1.in",
+                        filter: "contrast(1.1) drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
+                    })
+                    .set(pageEl, { zIndex: currentPageIndex + 10 })
+                    .to(pageEl, {
+                        rotationY: -180,
+                        duration: 0.5,
+                        ease: "power1.out",
+                        filter: "contrast(1) drop-shadow(0 0 0 rgba(0,0,0,0))"
+                    })
+                    .fromTo("#book-container", { scale: 0.95 }, { scale: 1, duration: 0.3, ease: "back.out(1.7)" }, "-=0.3");
+                } else {
+                    tl.to(pageEl, {
+                        rotationY: -180,
+                        duration: 0.9,
+                        ease: "power2.inOut",
+                        zIndex: currentPageIndex + 10,
+                        filter: "contrast(1.1) drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
+                    })
+                    .to(pageEl.querySelector('.shadow-overlay-right'), { opacity: 0.8, duration: 0.45, yoyo: true, repeat: 1 }, "<")
+                    .to(pageEl, { filter: "contrast(1) drop-shadow(0 0 0 rgba(0,0,0,0))" }, "-=0.45");
+                }
+
+                if (currentPageIndex === chapterPagesData.length - (isMobile ? 1 : 1)) {
+                    showChapterEnd();
+                }
+            }
+
+            function goToPrevPage() {
+                if (isFlipping || currentPageIndex <= 0) return;
+                
+                isFlipping = true;
+                currentPageIndex--;
+                const pageEl = document.getElementById(`book-page-${currentPageIndex}`);
+                
+                if (!isMobile) {
+                    pageLeftContent.innerHTML = createPageContent(chapterPagesData[currentPageIndex].left);
+                }
+
+                const tl = gsap.timeline({
+                    onComplete: () => {
+                        isFlipping = false;
+                        hideChapterEnd();
+                    }
+                });
+                
+                if (isMobile) {
+                    tl.to(pageEl, {
+                        rotationY: -90,
+                        duration: 0.5,
+                        ease: "power1.in",
+                        filter: "contrast(1.1) drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
+                    })
+                    .set(pageEl, { zIndex: (chapterPagesData.length - currentPageIndex) + 10 })
+                    .to(pageEl, {
+                        rotationY: 0,
+                        duration: 0.5,
+                        ease: "power1.out",
+                        filter: "contrast(1) drop-shadow(0 0 0 rgba(0,0,0,0))"
+                    })
+                    .fromTo("#book-container", { scale: 0.95 }, { scale: 1, duration: 0.3, ease: "back.out(1.7)" }, "-=0.3");
+                } else {
+                    tl.to(pageEl, {
+                        rotationY: 0,
+                        duration: 0.9,
+                        ease: "power2.inOut",
+                        zIndex: (chapterPagesData.length - currentPageIndex) + 10,
+                        filter: "contrast(1.1) drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
+                    })
+                    .to(pageEl.querySelector('.shadow-overlay-left'), { opacity: 0.8, duration: 0.45, yoyo: true, repeat: 1 }, "<")
+                    .to(pageEl, { filter: "contrast(1) drop-shadow(0 0 0 rgba(0,0,0,0))" }, "-=0.45");
+                }
+            }
+            
+            function showChapterEnd() {
+                if (isMobile) {
+                    gsap.to("#book-container", { scale: 0.9, y: -20, duration: 0.7, ease: "power4.inOut" });
+                } else {
+                    gsap.to(pageNavigation, { opacity: 0, y: 20, pointerEvents: 'none', duration: 0.4, ease: "power1.in" });
+                    gsap.to("#book-container", { scale: 0.9, duration: 0.7, ease: "power4.inOut" });
+                }
+                
+                gsap.set(chapterNavigation, { display: 'flex', opacity: 0, y: 40 });
+                gsap.to(chapterNavigation, {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.6,
+                    delay: 0.5,
+                    ease: "back.out(1.7)"
+                });
+                
+                gsap.utils.toArray('#chapter-navigation .chapter-nav-button').forEach(btn => {
+                    btn.addEventListener('mouseenter', () => {
+                        gsap.to(btn, { x: -2, duration: 0.05, yoyo: true, repeat: 3, ease: "power1.inOut" });
+                    });
+                });
+            }
+            
+            function hideChapterEnd() {
+                if (isMobile) {
+                     gsap.to("#book-container", { scale: 1, y: 0, duration: 0.5, ease: "power2.out" });
+                } else {
+                    gsap.to(pageNavigation, { opacity: 1, y: 0, pointerEvents: 'auto', duration: 0.4, ease: "power2.out" });
+                    gsap.to("#book-container", { scale: 1, duration: 0.5, ease: "power2.out" });
+                }
+                gsap.to(chapterNavigation, {
+                    opacity: 0,
+                    y: 40,
+                    duration: 0.4,
+                    ease: "power1.in",
+                    onComplete: () => gsap.set(chapterNavigation, { display: 'none' })
+                });
+            }
+
+            backButton.addEventListener('mouseenter', () => {
+                gsap.to(backButton, { scale: 1.15, rotate: -10, duration: 0.3, ease: 'back.out(1.7)' });
+            });
+            backButton.addEventListener('mouseleave', () => {
+                gsap.to(backButton, { scale: 1, rotate: 0, duration: 0.3, ease: 'power2.out' });
+            });
+
+            backButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.history.back();
+            });
+
+            retryButton.addEventListener('click', () => {
+                const { slug, comicSlug } = getUrlParams();
+                gsap.to(errorState, {
+                    scale: 0.8,
+                    opacity: 0,
+                    duration: 0.3,
+                    ease: "power1.in",
+                    onComplete: () => fetchData(slug, comicSlug)
+                });
+            });
+            
+            window.addEventListener('resize', () => {
+                const newIsMobile = window.innerWidth < 768;
+                if (newIsMobile !== isMobile) {
+                    isMobile = newIsMobile;
+                    const { slug, comicSlug } = getUrlParams();
+                    fetchData(slug, comicSlug);
+                }
+            });
+
+            const { slug, comicSlug } = getUrlParams();
+            fetchData(slug, comicSlug);
+            
+        });
+    </script>
+</body>
+</html>
